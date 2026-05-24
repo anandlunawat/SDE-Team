@@ -1,0 +1,35 @@
+ai-engineering-squad/
+│
+├── apps/
+│   ├── api/
+│   ├── dashboard/
+│   └── sandbox/
+│
+├── agents/
+│   ├── planner/
+│   ├── architect/
+│   ├── frontend/
+│   ├── backend/
+│   ├── reviewer/
+│   └── debugger/
+│
+├── graphs/
+│   ├── engineering_graph.py
+│   └── states.py
+│
+├── tools/
+│   ├── filesystem/
+│   ├── git/
+│   ├── terminal/
+│   ├── browser/
+│   └── testing/
+│
+├── memory/
+│   ├── vector/
+│   └── project_memory/
+│
+├── prompts/
+│
+├── sandbox/
+│
+└── docker/

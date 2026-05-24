@@ -59,19 +59,18 @@ def buildGraph() :
 
 
     # =========================================================
-    # PARALLEL EXECUTION
+    # SEQUENTIAL EXECUTION (architect → frontend → backend)
+    # Sequential prevents threading issues with Streamlit streaming.
+    # For true parallel with live UI, implement thread-safe buffers.
     # =========================================================
 
     graph.add_edge("architect", "frontend")
-
-    graph.add_edge("architect", "backend")
+    graph.add_edge("frontend", "backend")
 
 
     # =========================================================
-    # MERGE PARALLEL FLOWS
+    # MERGE TO REVIEWER
     # =========================================================
-
-    graph.add_edge("frontend", "reviewer")
 
     graph.add_edge("backend", "reviewer")
 

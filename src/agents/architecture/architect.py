@@ -1,13 +1,19 @@
 from src.graphs.states import EngineeringState
 import src
 import json
+from src.runtime.streaming import (
+    update_node_status,
+    append_stream_token,
+    append_log
+)
 
 
 def architect_node(state: EngineeringState):
-    print("\n--- ARCHITECT AGENT ---")
-
     architecture_plan = state["architecture_plan"]
     user_request = state["user_request"]
+    
+    update_node_status("architect", "running")
+    append_log("🔵 Architect started designing architecture")
 
     messages = [
         {
@@ -188,6 +194,7 @@ Return STRICT JSON only.
     ):
         content = part["message"]["content"]
         response += content
+        append_stream_token("architect", content)
         print(content, end="", flush=True)
 
     # =====================================================
@@ -196,26 +203,22 @@ Return STRICT JSON only.
 
     try:
         parsed_response = json.loads(response)
+        update_node_status("architect", "completed")
+        append_log("✅ Architect completed architecture design")
     except Exception as e:
         print("\nJSON PARSE ERROR:", e)
+        update_node_status("architect", "error")
+        append_log(f"❌ Architect error: JSON parse failed", level="error")
 
         parsed_response = {
             "architecture_overview": "",
-
             "frontend_tasks": [],
-
             "backend_tasks": [],
-
             "shared_tasks": [],
-
             "api_contracts": [],
-
             "database_schema": [],
-
             "folder_structure": "",
-
             "testing_strategy": "",
-
             "deployment_notes": ""
         }
 

@@ -2,3 +2,5 @@ pytest==7.4.3
 ollama
 python-dotenv
 langgraph
+streamlit
+pydantic

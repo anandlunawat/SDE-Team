@@ -1,6 +1,86 @@
 from src.graphs.states import EngineeringState
 import src
 import json
+import os
+import subprocess
+from pathlib import Path
+from src.runtime.streaming import (
+    update_node_status,
+    append_stream_token,
+    append_log
+)
+
+
+def create_and_init_frontend_project(project_name: str, desktop_path: str = None):
+    """
+    Create a React frontend project using create-react-app
+    """
+    
+    if desktop_path is None:
+        desktop_path = str(Path.home() / "Desktop")
+    
+    project_path = os.path.join(desktop_path, project_name)
+    
+    print(f"\n📁 Creating React project at: {project_path}")
+    print(f"🚀 Initializing with create-react-app...")
+    
+    try:
+        # Use npx create-react-app to initialize React project
+        subprocess.run(
+            ["npx", "create-react-app", project_path, "--template", "typescript"],
+            check=True,
+            timeout=600
+        )
+        print("   ✓ React project created successfully")
+    except subprocess.CalledProcessError as e:
+        print(f"   ✗ Error creating React project: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "project_path": project_path
+        }
+    except FileNotFoundError:
+        print("   ✗ npx not found. Please ensure Node.js and npm are installed.")
+        return {
+            "success": False,
+            "error": "npx not found",
+            "project_path": project_path
+        }
+    
+    print(f"\n📥 Installing additional dependencies...")
+    
+    # Install additional dependencies
+    additional_deps = [
+        "axios",
+        "zustand",
+        "react-query",
+        "tailwindcss",
+        "postcss",
+        "autoprefixer"
+    ]
+    
+    try:
+        subprocess.run(
+            ["npm", "install"] + additional_deps,
+            cwd=project_path,
+            check=True,
+            timeout=300
+        )
+        print("   ✓ Additional dependencies installed")
+    except subprocess.CalledProcessError as e:
+        print(f"   ✗ Error installing dependencies: {e}")
+    
+    print(f"\n✅ React project setup completed!")
+    print(f"📂 Project location: {project_path}")
+    print(f"\n💡 Next steps:")
+    print(f"   cd {project_path}")
+    print(f"   npm start")
+    
+    return {
+        "success": True,
+        "project_path": project_path,
+        "message": f"React project initialized at {project_path}"
+    }
 
 
 def frontend_node(state: EngineeringState):
@@ -188,6 +268,11 @@ Requirements:
     # =====================================================
     # STREAM RESPONSE
     # =====================================================
+    # STREAM RESPONSE
+    # =====================================================
+
+    update_node_status("frontend", "running")
+    append_log("🔵 Frontend started code generation")
 
     response = ""
 
@@ -197,14 +282,23 @@ Requirements:
         stream=True
     ):
         content = part["message"]["content"]
-
         response += content
+        append_stream_token("frontend", content)
 
         print(content, end="", flush=True)
+
+    update_node_status("frontend", "completed")
+    append_log("✅ Frontend code generation completed")
 
     # =====================================================
     # RETURN STATE UPDATE
     # =====================================================
+
+    # Create and initialize frontend project on Desktop
+    project_result = create_and_init_frontend_project(
+        project_name="frontend-app",
+        desktop_path=os.path.join(os.path.expanduser("~"), "Desktop")
+    )
 
     return {
         "generated_code": response,
@@ -237,7 +331,9 @@ Requirements:
             "logs": [
                 "Frontend architecture generated",
                 "Reusable components created",
-                "API integration implemented"
+                "API integration implemented",
+                f"Project created at: {project_result.get('project_path', 'N/A')}",
+                f"Status: {project_result.get('message', project_result.get('error', 'Unknown'))}"
             ]
         },
 

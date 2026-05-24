@@ -1,18 +1,22 @@
 from src.graphs.states import EngineeringState
-import src 
+import src
+from src.runtime.streaming import (
+    update_node_status,
+    append_stream_token,
+    append_log
+)
 
 
 def planner_node(state: EngineeringState):
-    print("\n--- PLANNER ---")
-
     task = state["user_request"]
+    
+    update_node_status("planner", "running")
+    append_log("🔵 Planner started analyzing task")
 
-    # Implement your planning logic here using src.client
-    print(f"Planning for task: {task} using client: {src.client}")
     messages = [
-    {
-        "role": "system",
-        "content": """
+        {
+            "role": "system",
+            "content": """
         You are an expert AI Software Engineering Planner.
 
         Your responsibility is to analyze the given software development task
@@ -53,27 +57,27 @@ def planner_node(state: EngineeringState):
         Keep the plan technical, structured, and implementation-ready.
         Do not write vague high-level descriptions.
         """
-            },
-            {
-                "role": "user",
-                "content": f"""
+        },
+        {
+            "role": "user",
+            "content": f"""
         Create a detailed engineering execution plan for the following task:
 
         TASK:
         {task}
         """
-            },
+        },
     ]
 
-    for part in src.client.chat('gpt-oss:120b-cloud', messages=messages, stream=True):
-        print(part['message']['content'], end='', flush=True)
-
-    # Collect the full plan output
     plan_output = ""
     for part in src.client.chat('gpt-oss:120b-cloud', messages=messages, stream=True):
         content = part['message']['content']
         plan_output += content
-        print(content, end='', flush=True)
+        append_stream_token("planner", content)
+        print(content, end="", flush=True)
+
+    update_node_status("planner", "completed")
+    append_log("✅ Planner completed")
 
     return {
         "user_request": task,
