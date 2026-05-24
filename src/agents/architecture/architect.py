@@ -1,3 +1,4 @@
+from src.agents.architecture.architecture_formatter import architecture_to_markdown
 from src.graphs.states import EngineeringState
 import src
 import json
@@ -194,7 +195,7 @@ Return STRICT JSON only.
     ):
         content = part["message"]["content"]
         response += content
-        append_stream_token("architect", content)
+        # append_stream_token("architect", content)
         print(content, end="", flush=True)
 
     # =====================================================
@@ -203,6 +204,12 @@ Return STRICT JSON only.
 
     try:
         parsed_response = json.loads(response)
+        markdown_output = architecture_to_markdown(parsed_response)
+
+        append_stream_token(
+            "architect",
+            markdown_output
+        )
         update_node_status("architect", "completed")
         append_log("✅ Architect completed architecture design")
     except Exception as e:
