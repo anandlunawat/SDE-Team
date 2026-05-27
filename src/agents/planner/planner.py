@@ -74,7 +74,7 @@ def planner_node(state: EngineeringState):
         content = part['message']['content']
         plan_output += content
         append_stream_token("planner", content)
-        print(content, end="", flush=True)
+        # print(content, end="", flush=True)
 
     update_node_status("planner", "completed")
     append_log("✅ Planner completed")

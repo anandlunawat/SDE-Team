@@ -196,7 +196,7 @@ Return STRICT JSON only.
         content = part["message"]["content"]
         response += content
         # append_stream_token("architect", content)
-        print(content, end="", flush=True)
+        # print(content, end="", flush=True)
 
     # =====================================================
     # SAFE JSON PARSING

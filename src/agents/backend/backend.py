@@ -464,7 +464,7 @@ Requirements:
         content = part["message"]["content"]
         response += content
         append_stream_token("backend", content)
-        print(content, end="", flush=True)
+        # print(content, end="", flush=True)
 
     update_node_status("backend", "completed")
     append_log("✅ Backend code generation completed")

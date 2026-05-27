@@ -285,7 +285,7 @@ Requirements:
         response += content
         append_stream_token("frontend", content)
 
-        print(content, end="", flush=True)
+        # print(content, end="", flush=True)
 
     update_node_status("frontend", "completed")
     append_log("✅ Frontend code generation completed")

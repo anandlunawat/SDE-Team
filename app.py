@@ -1,6 +1,7 @@
 """Streamlit UI-first Realtime LangGraph Orchestration Dashboard"""
 import streamlit as st
 import time
+import threading
 from src.graphs.engineering_graph import buildGraph
 from src.graphs.states import EngineeringState
 from src.runtime.streaming import (
@@ -9,6 +10,7 @@ from src.runtime.streaming import (
     reset_streaming_state,
     append_log
 )
+from src.runtime.runtime_state import runtime_state
 
 
 def initialize_app():
@@ -18,6 +20,10 @@ def initialize_app():
     if "graph" not in st.session_state:
         st.session_state.graph = buildGraph()
         append_log("✅ Graph initialized")
+    
+    # Setup periodic rerun for live updates
+    if "rerun_counter" not in st.session_state:
+        st.session_state.rerun_counter = 0
 
 
 def render_sidebar():
@@ -156,70 +162,73 @@ def render_logs():
             st.info(message)
 
 
-def run_workflow(task: str):
-    """Run the workflow with realtime streaming."""
-    state = get_streaming_state()
-    state["user_request"] = task
-    state["workflow_started"] = True
-    state["workflow_completed"] = False
+def run_graph_in_background(task: str, graph):
+    """
+    Execute graph in a background thread.
     
-    # Create initial state
-    initial_state: EngineeringState = {
-        "user_request": task,
-        "architecture_plan": "",
-        "tasks": [],
-        "active_task": {},
-        "completed_tasks": [],
-        "generated_code": "",
-        "review_feedback": "",
-        "review_approved": False,
-        "test_results": "",
-        "test_passed": False,
-        "errors": [],
-        "debug_attempts": 0,
-        "modified_files": [],
-        "project_context": ""
-    }
+    Graph execution streams tokens/logs to RuntimeManager.
+    UI polls RuntimeManager independently.
     
-    append_log("🚀 Workflow started")
-    
-    # Placeholder for live updates
-    progress_placeholder = st.empty()
-    tokens_placeholder = st.empty()
-    logs_placeholder = st.empty()
-    
+    Args:
+        task: User's engineering task
+        graph: Compiled LangGraph instance
+    """
     try:
-        # Stream the graph execution
-        for event in st.session_state.graph.stream(initial_state):
-            # Get current state
-            current_state = get_streaming_state()
-            
-            # Update placeholders
-            with progress_placeholder.container():
-                st.subheader("📊 Workflow Progress")
-                render_node_status()
-            
-            with tokens_placeholder.container():
-                st.subheader("📡 Live Token Stream")
-                render_live_tokens()
-            
-            with logs_placeholder.container():
-                st.subheader("📝 Workflow Logs")
-                render_logs()
-            
-            # Small delay for UI responsiveness
-            time.sleep(0.01)
+        # Mark workflow as started
+        runtime_state.set_workflow_started(task)
+        append_log("🚀 Workflow started")
+        
+        # Create initial state
+        initial_state: EngineeringState = {
+            "user_request": task,
+            "architecture_plan": "",
+            "tasks": [],
+            "active_task": {},
+            "completed_tasks": [],
+            "generated_code": "",
+            "review_feedback": "",
+            "review_approved": False,
+            "test_results": "",
+            "test_passed": False,
+            "errors": [],
+            "debug_attempts": 0,
+            "modified_files": [],
+            "project_context": ""
+        }
+        
+        # Stream graph execution (non-blocking)
+        for event in graph.stream(initial_state):
+            # Graph nodes update RuntimeManager directly
+            # No need to do anything here - just let it stream
+            pass
         
         # Mark workflow as completed
-        state["workflow_completed"] = True
-        state["final_state"] = initial_state
+        runtime_state.set_workflow_completed(initial_state)
         append_log("✅ Workflow completed successfully")
         
-        st.success("✅ Workflow completed!")
-        
     except Exception as e:
-        append_log(f"❌ Workflow failed: {str(e)}", level="error")
-        st.error(f"❌ Workflow failed: {str(e)}")
+        error_msg = f"❌ Workflow failed: {str(e)}"
+        runtime_state.set_error(error_msg)
+        append_log(error_msg, level="error")
+
+
+def run_workflow(task: str):
+    """
+    Initiate background graph execution (non-blocking).
+    
+    This starts a daemon thread and returns immediately.
+    UI will poll RuntimeManager for updates.
+    """
+    # Start graph execution in background thread
+    graph_thread = threading.Thread(
+        target=run_graph_in_background,
+        args=(task, st.session_state.graph),
+        daemon=True
+    )
+    graph_thread.start()
+    
+    # Return immediately - Streamlit will rerun periodically to poll RuntimeManager
+    st.session_state.workflow_thread = graph_thread
 
 
 def main():
@@ -252,14 +261,22 @@ def main():
     
     st.divider()
     
+    # Start workflow if button clicked
     if start_clicked:
         run_workflow(task)
-    else:
-        # Show default views
-        render_live_tokens()
-        st.divider()
-        render_logs()
+    
+    # Render live content (always visible)
+    render_live_tokens()
+    st.divider()
+    render_logs()
+    
+    # Poll RuntimeManager for updates every 0.5 seconds
+    state = runtime_state.get_state()
+    if state.get("workflow_started") and not state.get("workflow_completed"):
+        time.sleep(0.5)
+        st.rerun()
 
 
 if __name__ == "__main__":
     main()
+
