@@ -132,6 +132,8 @@ class EngineeringState(TypedDict):
     # Architecture output
     architecture_plan: str
 
+    architecture_approval: str
+
     # Task Management
     tasks: ArchitectureTasks
 

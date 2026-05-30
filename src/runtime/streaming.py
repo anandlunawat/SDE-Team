@@ -61,3 +61,7 @@ def get_streamed_tokens() -> dict:
     """Get all streamed tokens for every node."""
     state = runtime_state.get_state()
     return state.get("streamed_tokens", {})
+
+def set_interrupt(payload: any = None):
+    """Set an interrupt payload (e.g., for approvals)."""
+    runtime_state.set_interrupt(payload)

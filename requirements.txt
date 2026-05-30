@@ -1,6 +1,6 @@
 pytest==7.4.3
 ollama
 python-dotenv
-langgraph
+langgraph==1.2.2
 streamlit
 pydantic

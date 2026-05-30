@@ -1,9 +1,11 @@
 """Streamlit UI-first Realtime LangGraph Orchestration Dashboard"""
+from click import Command
 import streamlit as st
 import time
 import threading
 from src.graphs.engineering_graph import buildGraph
 from src.graphs.states import EngineeringState
+from src.runtime.event_processor import process_event
 from src.runtime.streaming import (
     initialize_streaming_state,
     get_streaming_state,
@@ -162,54 +164,154 @@ def render_logs():
             st.info(message)
 
 
+# def run_graph_in_background(task: str, graph):
+#     """
+#     Execute graph in a background thread.
+    
+#     Graph execution streams tokens/logs to RuntimeManager.
+#     UI polls RuntimeManager independently.
+    
+#     Args:
+#         task: User's engineering task
+#         graph: Compiled LangGraph instance
+#     """
+#     try:
+#         # Mark workflow as started
+#         runtime_state.set_workflow_started(task)
+#         append_log("🚀 Workflow started")
+        
+#         # Create initial state
+#         initial_state: EngineeringState = {
+#             "user_request": task,
+#             "architecture_plan": "",
+#             "tasks": [],
+#             "active_task": {},
+#             "completed_tasks": [],
+#             "generated_code": "",
+#             "review_feedback": "",
+#             "review_approved": False,
+#             "test_results": "",
+#             "test_passed": False,
+#             "errors": [],
+#             "debug_attempts": 0,
+#             "modified_files": [],
+#             "project_context": ""
+#         }
+        
+#         # Stream graph execution using the event-driven API
+#         for event in graph.stream_events(initial_state, version="v3"):
+#             print(f"Received event: {event}")
+#             process_event(event, runtime_state)
+
+#         # Mark workflow as completed
+#         runtime_state.set_workflow_completed(initial_state)
+#         append_log("✅ Workflow completed successfully")
+        
+#     except Exception as e:
+#         error_msg = f"❌ Workflow failed: {str(e)}"
+#         runtime_state.set_error(error_msg)
+#         append_log(error_msg, level="error")
+
+from langgraph.types import Command
+import time
+
+
 def run_graph_in_background(task: str, graph):
-    """
-    Execute graph in a background thread.
-    
-    Graph execution streams tokens/logs to RuntimeManager.
-    UI polls RuntimeManager independently.
-    
-    Args:
-        task: User's engineering task
-        graph: Compiled LangGraph instance
-    """
+
+    config = {
+        "configurable": {
+            "thread_id": "workflow_123"
+        }
+    }
+
+    current_input: EngineeringState = {
+        "user_request": task,
+        "architecture_plan": "",
+        "tasks": [],
+        "active_task": {},
+        "completed_tasks": [],
+        "generated_code": "",
+        "review_feedback": "",
+        "review_approved": False,
+        "test_results": "",
+        "test_passed": False,
+        "errors": [],
+        "debug_attempts": 0,
+        "modified_files": [],
+        "project_context": ""
+    }
+
     try:
-        # Mark workflow as started
+
         runtime_state.set_workflow_started(task)
         append_log("🚀 Workflow started")
-        
-        # Create initial state
-        initial_state: EngineeringState = {
-            "user_request": task,
-            "architecture_plan": "",
-            "tasks": [],
-            "active_task": {},
-            "completed_tasks": [],
-            "generated_code": "",
-            "review_feedback": "",
-            "review_approved": False,
-            "test_results": "",
-            "test_passed": False,
-            "errors": [],
-            "debug_attempts": 0,
-            "modified_files": [],
-            "project_context": ""
-        }
-        
-        # Stream graph execution (non-blocking)
-        for event in graph.stream(initial_state):
-            # Graph nodes update RuntimeManager directly
-            # No need to do anything here - just let it stream
-            pass
-        
-        # Mark workflow as completed
-        runtime_state.set_workflow_completed(initial_state)
-        append_log("✅ Workflow completed successfully")
-        
+
+        while True:
+
+            interrupted = False
+
+            for event in graph.stream_events(
+                current_input,
+                config=config,
+                version="v3"
+            ):
+
+                process_event(event, runtime_state)
+
+                params = event.get("params", {})
+
+                interrupts = params.get(
+                    "interrupts",
+                    ()
+                )
+
+                if interrupts:
+
+                    interrupted = True
+
+            if not interrupted:
+                break
+
+            append_log(
+                "⏸ Waiting for architecture approval"
+            )
+
+            while True:
+
+                resume_value = (
+                    runtime_state.get_resume_response()
+                )
+
+                if resume_value is not None:
+                    break
+
+                time.sleep(0.2)
+
+            print(f"Received resume value: {resume_value} and interrupt cleared: {runtime_state.get_state().get('pending_interrupt') is None}")
+            runtime_state.clear_interrupt()
+
+            current_input = Command(
+                resume=resume_value
+            )
+
+        runtime_state.set_workflow_completed({})
+
+        append_log(
+            "✅ Workflow completed successfully"
+        )
+
     except Exception as e:
-        error_msg = f"❌ Workflow failed: {str(e)}"
+
+        error_msg = (
+            f"❌ Workflow failed: {str(e)}"
+        )
+
         runtime_state.set_error(error_msg)
-        append_log(error_msg, level="error")
+
+        append_log(
+            error_msg,
+            level="error"
+        )
 
 
 def run_workflow(task: str):
@@ -229,6 +331,43 @@ def run_workflow(task: str):
     
     # Return immediately - Streamlit will rerun periodically to poll RuntimeManager
     st.session_state.workflow_thread = graph_thread
+
+def render_interrupt():
+    state = get_streaming_state()
+
+    interrupt_payload = state.get("pending_interrupt")
+    print(f"Current interrupt payload: {interrupt_payload}")
+
+    if not interrupt_payload:
+        return
+
+    st.title("⚠️ Architecture Approval Needed")
+
+    st.subheader(interrupt_payload.get("message", "No message provided"))
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button(
+            "✅ Approve",
+            use_container_width=True
+        ):
+            runtime_state.set_resume_response("yes")
+            print("Interrupt cleared in Yes CAse: ", runtime_state.get_state().get("pending_interrupt") is None)
+            runtime_state.clear_interrupt()
+
+            st.rerun()
+
+    with col2:
+        if st.button(
+            "❌ Reject",
+            use_container_width=True
+        ):
+            runtime_state.set_resume_response("no")
+            print("Interrupt cleared in No case: ", runtime_state.get_state().get("pending_interrupt") is None)
+            runtime_state.clear_interrupt()
+
+            st.rerun()
 
 
 def main():
@@ -251,7 +390,9 @@ def main():
     if reset_clicked:
         reset_streaming_state()
         st.rerun()
-    
+
+    render_interrupt()
+
     # Main area
     render_header()
     
